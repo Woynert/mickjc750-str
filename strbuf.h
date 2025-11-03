@@ -237,7 +237,7 @@
 		int size;						///< Size of the buffers contents.
 		int capacity;					///< Current capacity of the buffer.
 		strbuf_allocator_t allocator;	///< Allocator in use, if available.
-		char cstr[];					///< Beginning of the buffers contents.
+		char cstr[1];					///< Beginning of the buffers contents.
 	} strbuf_t;
 
 
