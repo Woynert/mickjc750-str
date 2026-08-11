@@ -53,11 +53,14 @@
  * @struct strview_t
  * @brief A view of some string data
  **********************************************************************************/
+#ifndef _STRVIEW_STRUCT_TYPE_
+	#define _STRVIEW_STRUCT_TYPE_
 	typedef struct strview_t
 	{
 		const char* data;
 		int size;
 	} strview_t;
+#endif
 
 
 /**
