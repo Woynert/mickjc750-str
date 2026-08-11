@@ -53,7 +53,7 @@ char* strview_to_cstr(char* dst, size_t dst_size, strview_t str)
 
 bool strview_is_valid(strview_t str)
 {
-	return !!str.data;
+	return !!str.data && str.size >= 0;
 }
 
 void strview_swap(strview_t* a, strview_t* b)
