@@ -102,6 +102,7 @@ strbuf_t strbuf_create_fixed(char *data, int capacity) {
 }
 
 static inline int strbuf__int_min(int a, int b) { return a < b ? a : b; }
+static inline int strbuf__int_max(int a, int b) { return a > b ? a : b; }
 
 static bool strbuf__add_will_overflow_int(int a, int b) {
     int c = a;
@@ -171,6 +172,7 @@ int strbuf_assign(strbuf_t* buf, strview_t str) {
 
 int strbuf_append(strbuf_t* buf, strview_t str) {
     if (!buf) { return -1; }
+    if (str.size <= 0) { return 0; }
     int required_size = buf->size + str.size + STRBUF__ZERO_TERM;
     if (buf->capacity < required_size) {
         strview_t old_buf = strbuf_view(buf);
@@ -186,6 +188,7 @@ int strbuf_append(strbuf_t* buf, strview_t str) {
 
 int strbuf_prepend(strbuf_t* buf, strview_t str) {
     if (!buf) { return -1; }
+    if (str.size <= 0) { return 0; }
     int required_size = buf->size + str.size + STRBUF__ZERO_TERM;
     if (buf->capacity < required_size) {
         strview_t old_buf = strbuf_view(buf);
@@ -198,6 +201,50 @@ int strbuf_prepend(strbuf_t* buf, strview_t str) {
     buf->size = buf->size + str.size;
     buf->cstr[buf->size] = 0;
     return 0;
+}
+
+int strbuf_insert_at_index(strbuf_t *buf, const int index, strview_t str) {
+    if (!buf) { return -1; }
+    if (str.size <= 0) { return 0; }
+    if (index < 0 || index > buf->size) { return -1; }
+    int new_size = buf->size + str.size;
+    int required_cap = new_size + STRBUF__ZERO_TERM;
+    strview_t old_buf = strbuf_view(buf);
+    bool is_inside = strview_is_subview_of_view(old_buf, str);
+    if (buf->capacity < required_cap) {
+        int err = strbuf__grow_to_fit(buf, required_cap);
+        if (err) { strbuf_empty(buf); return -1; }
+        if (is_inside) { str.data = buf->cstr + (str.data - old_buf.data); }
+    }
+    memmove(buf->cstr + index + str.size, buf->cstr + index, (size_t)(buf->size - index));
+    if (is_inside) {
+        int cut = index;
+        int pos = (int)(str.data - buf->cstr);
+        if (pos < cut) {
+            strview_t left_half = { .data = str.data, .size = strbuf__int_min(str.size, cut-pos), };
+            strview_t right_half = { .data = buf->cstr + index + str.size, .size = strbuf__int_max(0, str.size - left_half.size) };
+            memmove(buf->cstr + index, left_half.data, (size_t)left_half.size);
+            memmove(buf->cstr + index + left_half.size, right_half.data, (size_t)right_half.size);
+        } else {
+            str.data += str.size;
+            memmove(buf->cstr + index, str.data, (size_t)str.size);
+        }
+    } else {
+        memmove(buf->cstr + index, str.data, (size_t)str.size);
+    }
+    buf->size = new_size;
+    buf->cstr[buf->size] = 0;
+    return 0;
+}
+
+int strbuf_insert_before(strbuf_t *buf, strview_t pos, strview_t view) {
+    if (!strview_is_subview_of_view(strbuf_view(buf), pos)) { return -1; }
+    return strbuf_insert_at_index(buf, (int)(pos.data - buf->cstr), view);
+}
+
+int strbuf_insert_after(strbuf_t *buf, strview_t pos, strview_t view) {
+    if (!strview_is_subview_of_view(strbuf_view(buf), pos)) { return -1; }
+    return strbuf_insert_at_index(buf, (int)(pos.data - buf->cstr) + view.size, view);
 }
 
 int strbuf__cat_variadic(Arena scratch, strbuf_t* buf, int view_count, ...) {

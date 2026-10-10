@@ -36,10 +36,10 @@
 	TEST test_strbuf_assign(void);
 	TEST test_strbuf_append(void);
 	TEST test_strbuf_prepend(void);
-	/*TEST test_strbuf_insert_at_index(void);*/
-	/*TEST test_strbuf_insert_before(void);*/
+	TEST test_strbuf_insert_at_index(void);
+	TEST test_strbuf_insert_before(void);
 	/*TEST test_strbuf_insert_after(void);*/
-	/*TEST test_strbuf_to_cstr(void);*/
+	/*TEST test_strbuf_to_cstr(void); // <-- WONT FIX.*/
 	/*TEST test_strbuf_terminate_views(void);*/
 
 	/*SUITE(suite_strview);*/
@@ -117,10 +117,10 @@ SUITE(suite_strbuf)
 	RUN_TEST(test_strbuf_assign);
 	RUN_TEST(test_strbuf_append);
 	RUN_TEST(test_strbuf_prepend);
-	/*RUN_TEST(test_strbuf_insert_at_index);*/
-	/*RUN_TEST(test_strbuf_insert_before);*/
+	RUN_TEST(test_strbuf_insert_at_index);
+	RUN_TEST(test_strbuf_insert_before);
 	/*RUN_TEST(test_strbuf_insert_after);*/
-	/*RUN_TEST(test_strbuf_to_cstr);*/
+	/*RUN_TEST(test_strbuf_to_cstr); /// <--- WONT FIX.*/
 	/*RUN_TEST(test_strbuf_terminate_views);*/
 }
 
@@ -1221,32 +1221,55 @@ TEST test_strbuf_prepend(void)
 	PASS();
 }
 
-/*TEST test_strbuf_insert_at_index(void)*/
-/*{*/
+TEST test_strbuf_insert_at_index(void)
+{
 	/*strbuf_t* buf;*/
-	/*strview_t str1;*/
+	strview_t str1;
 
 	/*buf = strbuf_create(0, NULL);*/
 	/*ASSERT(buf);*/
+	strbuf_t buf_instance = { 0 };
+	strbuf_t *buf = &buf_instance;
 
-	/*// Testing strbuf_insert_at_index(), with source from the destination*/
-	/*str1 = strbuf_assign(&buf, cstr("{Hello-testing-some-string}"));*/
-	/*strbuf_shrink(&buf);*/
-	/*str1 = strbuf_insert_at_index(&buf, 6, strbuf_view(&buf));*/
-	/*ASSERT(!memcmp(str1.data, "{Hello{Hello-testing-some-string}-testing-some-string}", str1.size));*/
-	/*ASSERT(buf->cstr[buf->size] == 0);	//check the 0 terminator is in place*/
+	// Testing strbuf_insert_at_index(), with source from the destination
+	strbuf_assign(buf, cstr("{Hello-testing-some-string}"));
+	str1 = strbuf_view(buf);
+	strbuf_shrink(buf);
+	strbuf_insert_at_index(buf, 6, strbuf_view(buf));
+	str1 = strbuf_view(buf);
+	printf("\n");
+	printf("["PRIstr"]\n", PRIstrarg(str1));
+	printf("\n");
+	ASSERT(!memcmp(str1.data, "{Hello{Hello-testing-some-string}-testing-some-string}", (size_t)str1.size));
+	ASSERT(buf->cstr[buf->size] == 0);	//check the 0 terminator is in place
 
-	/*// Testing strbuf_insert_at_index(), with source from the destination*/
-	/*str1 = strbuf_assign(&buf, cstr("{Hello-testing-some-string}"));*/
-	/*strbuf_shrink(&buf);*/
-	/*str1 = strbuf_insert_at_index(&buf, 6, "(random text)");*/
-	/*ASSERT(!memcmp(str1.data, "{Hello(random text)-testing-some-string}", str1.size));*/
-	/*ASSERT(buf->cstr[buf->size] == 0);	//check the 0 terminator is in place*/
+	// Testing strbuf_insert_at_index(), with source from the destination before index.
+	strbuf_assign(buf, cstr("{Hello-testing-some-string}"));
+	strbuf_insert_at_index(buf, 7, strview_sub(strbuf_view(buf), 1, 1+5)); // -> Gets "Hello".
+	str1 = strbuf_view(buf);
+	printf("["PRIstr"]\n", PRIstrarg(str1));
+	ASSERT(!memcmp(str1.data, "{Hello-Hellotesting-some-string}", (size_t)str1.size));
 
-	/*strbuf_destroy(&buf);*/
-	/*ASSERT(!buf);*/
-	/*PASS();*/
-/*}*/
+	// Testing strbuf_insert_at_index(), with source from the destination after index.
+	strbuf_assign(buf, cstr("{Hello-testing-some-string}"));
+	strbuf_insert_at_index(buf, 6, strview_sub(strbuf_view(buf), 19, 19+7)); // -> Gets "-string".
+	str1 = strbuf_view(buf);
+	printf("->["PRIstr"]\n", PRIstrarg(str1));
+	ASSERT(!memcmp(str1.data, "{Hello-string-testing-some-string}", (size_t)str1.size));
+
+	// Testing strbuf_insert_at_index(), with source from the destination
+	strbuf_assign(buf, cstr("{Hello-testing-some-string}"));
+	str1 = strbuf_view(buf);
+	strbuf_shrink(buf);
+	strbuf_insert_at_index(buf, 6, cstr_SL("(random text)"));
+	str1 = strbuf_view(buf);
+	ASSERT(!memcmp(str1.data, "{Hello(random text)-testing-some-string}", (size_t)str1.size));
+	ASSERT(buf->cstr[buf->size] == 0);	//check the 0 terminator is in place
+
+	strbuf_destroy(buf);
+	ASSERT(!buf->cstr);
+	PASS();
+}
 
 /*TEST test_strview_split_line(void)*/
 /*{*/
@@ -1357,92 +1380,99 @@ TEST test_strbuf_prepend(void)
 	/*PASS();*/
 /*}*/
 
-/*TEST test_strbuf_insert_before(void)*/
-/*{*/
+TEST test_strbuf_insert_before(void)
+{
 	/*strbuf_t* buf;*/
-	/*strview_t str1;*/
+	strview_t str1;
+	strbuf_t buf_instance = { 0 };
+	strbuf_t *buf = &buf_instance;
 
 	/*buf = strbuf_create(0, NULL);*/
 	/*ASSERT(buf);*/
 
-	/*strbuf_assign(&buf, cstr("Hello"));*/
-	/*str1 = strview_find_last(strbuf_view(&buf), cstr(""));*/
-	/*strbuf_insert_before(&buf, str1, cstr("-test"));*/
-	/*ASSERT(!memcmp(buf->cstr, "Hello-test", buf->size));*/
+	strbuf_assign(buf, cstr("Hello"));
+	str1 = strview_find_last(strbuf_view(buf), cstr(""));
+	strbuf_insert_before(buf, str1, cstr("-test"));
+	ASSERT(!memcmp(buf->cstr, "Hello-test", (size_t)buf->size));
 
-	/*strbuf_assign(&buf, cstr("Hello Mellow"));*/
-	/*str1 = strview_find_last(strbuf_view(&buf), cstr("ll"));*/
-	/*strbuf_insert_before(&buf, str1, cstr("..."));*/
-	/*ASSERT(!memcmp(buf->cstr, "Hello Me...llow", buf->size));*/
+	strbuf_assign(buf, cstr("Hello Mellow"));
+	str1 = strview_find_last(strbuf_view(buf), cstr("ll"));
+	strbuf_insert_before(buf, str1, cstr("..."));
+	ASSERT(!memcmp(buf->cstr, "Hello Me...llow", (size_t)buf->size));
 
-	/*strbuf_assign(&buf, cstr("Hello Mellow"));*/
-	/*str1 = strview_find_first(strbuf_view(&buf), cstr("ll"));*/
-	/*strbuf_insert_before(&buf, str1, cstr("---"));*/
-	/*ASSERT(!memcmp(buf->cstr, "He---llo Mellow", buf->size));*/
+	strbuf_assign(buf, cstr("Hello Mellow"));
+	str1 = strview_find_first(strbuf_view(buf), cstr("ll"));
+	strbuf_insert_before(buf, str1, cstr("---"));
+	ASSERT(!memcmp(buf->cstr, "He---llo Mellow", (size_t)buf->size));
 
-	/*strbuf_assign(&buf, cstr("Hello Mellow"));*/
-	/*str1 = strview_find_first(strbuf_view(&buf), cstr(""));*/
-	/*strbuf_insert_before(&buf, str1, cstr("***"));*/
-	/*ASSERT(!memcmp(buf->cstr, "***Hello Mellow", buf->size));*/
+	strbuf_assign(buf, cstr("Hello Mellow"));
+	str1 = strview_find_first(strbuf_view(buf), cstr(""));
+	strbuf_insert_before(buf, str1, cstr("***"));
+	ASSERT(!memcmp(buf->cstr, "***Hello Mellow", (size_t)buf->size));
 
-	/*strbuf_assign(&buf, cstr("Hello Mellow"));*/
-	/*str1 = strview_find_last(strbuf_view(&buf), "ll");*/
-	/*strbuf_insert_before(&buf, str1, "...");*/
-	/*ASSERT(!memcmp(buf->cstr, "Hello Me...llow", buf->size));*/
+	strbuf_assign(buf, cstr("Hello Mellow"));
+	str1 = strview_find_last(strbuf_view(buf), "ll");
+	strbuf_insert_before(buf, str1, cstr_SL("..."));
+	ASSERT(!memcmp(buf->cstr, "Hello Me...llow", (size_t)buf->size));
 
-	/*strbuf_destroy(&buf);*/
-	/*ASSERT(!buf);*/
-	/*PASS();*/
-/*}*/
+	strbuf_destroy(buf);
+	ASSERT(!buf->cstr);
+	PASS();
+}
 
-/*TEST test_strbuf_insert_after(void)*/
-/*{*/
+TEST test_strbuf_insert_after(void)
+{
 	/*strbuf_t* buf;*/
-	/*strview_t str1;*/
+	strview_t str1;
 
 	/*buf = strbuf_create(0, NULL);*/
 	/*ASSERT(buf);*/
+	strbuf_t buf_instance = { 0 };
+	strbuf_t *buf = &buf_instance;
 
-	/*strbuf_assign(&buf, cstr("Hello"));*/
-	/*str1 = strview_find_last(strbuf_view(&buf), cstr(""));*/
-	/*strbuf_insert_after(&buf, str1, cstr("-test"));*/
-	/*ASSERT(!memcmp(buf->cstr, "Hello-test", buf->size));*/
+	strbuf_assign(buf, cstr("Hello"));
+	str1 = strview_find_last(strbuf_view(buf), cstr(""));
+	strbuf_insert_after(buf, str1, cstr("-test"));
+	ASSERT(!memcmp(buf->cstr, "Hello-test", (size_t)buf->size));
 
-	/*strbuf_assign(&buf, cstr("Hello Mellow"));*/
-	/*str1 = strview_find_last(strbuf_view(&buf), cstr("ll"));*/
-	/*strbuf_insert_after(&buf, str1, cstr("..."));*/
-	/*ASSERT(!memcmp(buf->cstr, "Hello Mell...ow", buf->size));*/
+	strbuf_assign(buf, cstr("Hello Mellow"));
+	str1 = strview_find_last(strbuf_view(buf), cstr("ll"));
+	strbuf_insert_after(buf, str1, cstr("..."));
+	ASSERT(!memcmp(buf->cstr, "Hello Mell...ow", (size_t)buf->size));
 
-	/*strbuf_assign(&buf, cstr("Hello Mellow"));*/
-	/*str1 = strview_find_first(strbuf_view(&buf), cstr("ll"));*/
-	/*strbuf_insert_after(&buf, str1, cstr("---"));*/
-	/*ASSERT(!memcmp(buf->cstr, "Hell---o Mellow", buf->size));*/
+	strbuf_assign(buf, cstr("Hello Mellow"));
+	str1 = strview_find_first(strbuf_view(buf), cstr("ll"));
+	strbuf_insert_after(buf, str1, cstr("---"));
+	ASSERT(!memcmp(buf->cstr, "Hell---o Mellow", (size_t)buf->size));
 
-	/*strbuf_assign(&buf, cstr("Hello Mellow"));*/
-	/*str1 = strview_find_first(strbuf_view(&buf), cstr(""));*/
-	/*strbuf_insert_after(&buf, str1, cstr("***"));*/
-	/*ASSERT(!memcmp(buf->cstr, "***Hello Mellow", buf->size));*/
+	strbuf_assign(buf, cstr("Hello Mellow"));
+	str1 = strview_find_first(strbuf_view(buf), cstr(""));
+	strbuf_insert_after(buf, str1, cstr("***"));
+	ASSERT(!memcmp(buf->cstr, "***Hello Mellow", (size_t)buf->size));
 
-	/*strbuf_assign(&buf, cstr("Hello Mellow"));*/
-	/*str1 = strview_find_last(strbuf_view(&buf), "ll");*/
-	/*strbuf_insert_after(&buf, str1, "...");*/
-	/*ASSERT(!memcmp(buf->cstr, "Hello Mell...ow", buf->size));*/
+	strbuf_assign(buf, cstr("Hello Mellow"));
+	str1 = strview_find_last(strbuf_view(buf), "ll");
+	strbuf_insert_after(buf, str1, cstr_SL("..."));
+	ASSERT(!memcmp(buf->cstr, "Hello Mell...ow", (size_t)buf->size));
 
-	/*strbuf_destroy(&buf);*/
-	/*ASSERT(!buf);*/
-	/*PASS();*/
-/*}*/
+	strbuf_destroy(buf);
+	ASSERT(!buf->cstr);
+	PASS();
+}
 
 /*TEST test_strbuf_to_cstr(void)*/
 /*{*/
-	/*strbuf_t* dbuf = strbuf_create(0, NULL);*/
-	/*strbuf_t* sbuf = strbuf_create_fixed(static_buf, STATIC_BUFFER_SIZE);*/
+	/*strbuf_t dbuf = { 0 };*/
+	/*strbuf_t sbuf = strbuf_create_fixed(static_buf, STATIC_BUFFER_SIZE);*/
+	/*[>strbuf_t* dbuf = strbuf_create(0, NULL);<]*/
+	/*[>strbuf_t* sbuf = strbuf_create_fixed(static_buf, STATIC_BUFFER_SIZE);<]*/
 	/*char* dstr;*/
 	/*char* sstr;*/
 
 	/*strbuf_assign(&dbuf, cstr("Some test string in a dynamic buffer, hello test."));*/
 	/*strbuf_assign(&sbuf, cstr("Some test string in a static buffer, hello test."));*/
 
+	/*[>dstr = <]*/
 	/*dstr = strbuf_to_cstr(&dbuf);*/
 	/*sstr = strbuf_to_cstr(&sbuf);*/
 

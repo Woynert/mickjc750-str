@@ -174,7 +174,7 @@ bool strview_is_subview_of_view(strview_t str, strview_t sub) {
 	ptrdiff_t right1 = (ptrdiff_t)str.data + str.size;
 	ptrdiff_t left2  = (ptrdiff_t)sub.data;
 	ptrdiff_t right2 = (ptrdiff_t)sub.data + sub.size;
-	return ! ( left1 > right2 || left2 > right1 );
+	return left2 >= left1 && right2 <= right1; // TODO: Write test for this.
 }
 
 strview_t strview_trim_start_cstr(strview_t str, const char* chars_to_trim)
