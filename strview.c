@@ -169,6 +169,14 @@ strview_t strview_sub(strview_t str, int begin, int end)
 	return result;
 }
 
+bool strview_is_subview_of_view(strview_t str, strview_t sub) {
+	ptrdiff_t left1  = (ptrdiff_t)str.data;
+	ptrdiff_t right1 = (ptrdiff_t)str.data + str.size;
+	ptrdiff_t left2  = (ptrdiff_t)sub.data;
+	ptrdiff_t right2 = (ptrdiff_t)sub.data + sub.size;
+	return ! ( left1 > right2 || left2 > right1 );
+}
+
 strview_t strview_trim_start_cstr(strview_t str, const char* chars_to_trim)
 {
 	return strview_trim_start_strview(str, cstr(chars_to_trim));
@@ -510,12 +518,13 @@ strview_t strview_dequote(strview_t src)
 	strview_t result = src;
 	char quote_char;
 
-	if(result.size > 1)
+	if(result.size > 1) {
 		quote_char = result.data[0];
 	while( 	(result.size > 1)
 	 && 	(result.data[0] == quote_char)
 	 && 	(result.data[result.size-1] == quote_char) )
 		result = strview_sub(result, 1, -1);
+	}
 	return result;
 }
 

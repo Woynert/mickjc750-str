@@ -33,7 +33,7 @@
  * printf("The view is %"PRIstr"\n", PRIstrarg(my_view));
  * @endcode
   **********************************************************************************/ 
-	#define PRIstr	".*s"
+	#define PRIstr	"%.*s"
 
 
 /**
@@ -442,6 +442,12 @@
  * @endcode
  * **********************************************************************************/
 	strview_t strview_sub(strview_t str, int begin, int end);
+
+
+/**
+ * @brief Check whether or not a substring is physically inside another substring.
+ * **********************************************************************************/
+	bool strview_is_subview_of_view(strview_t str, strview_t sub);
 
 /**
  * @brief Trim both ends of a view.
