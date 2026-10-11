@@ -38,6 +38,7 @@ TEST test_strbuf_insert_before(void);
 TEST test_strbuf_insert_after(void);
 /*TEST test_strbuf_to_cstr(void); // <-- WONT FIX.*/
 /*TEST test_strbuf_terminate_views(void);*/
+TEST test_strbuf_empty(void);
 
 
 ArenaRoot arenaroot;
@@ -85,6 +86,7 @@ SUITE(suite_strbuf)
 	RUN_TEST(test_strbuf_insert_after);
 	/*RUN_TEST(test_strbuf_to_cstr); /// <--- WONT FIX.*/
 	/*RUN_TEST(test_strbuf_terminate_views);*/
+	RUN_TEST(test_strbuf_empty);
 }
 
 
@@ -178,24 +180,24 @@ TEST test_strbuf_strcat(void)
 	ASSERT(buf->cstr);
 
 	//Concatenating "AAAAAAAAAA", "BBBBBBBBBB", "CCCCCCCCCC"
-	strbuf_cat(arena, buf, cstr("AAAAAAAAAA"), cstr("BBBBBBBBBB"), cstr("CCCCCCCCCC"));
+	strbuf_cat(&arena, buf, cstr("AAAAAAAAAA"), cstr("BBBBBBBBBB"), cstr("CCCCCCCCCC"));
 	ASSERT(buf->capacity >= 30);
 	ASSERT(buf->size == 30);
 	ASSERT(!strcmp(buf->cstr, "AAAAAAAAAABBBBBBBBBBCCCCCCCCCC"));
 
 	//Appending -AFTER to existing buffer
-	strbuf_cat(arena, buf, strbuf_view(buf), cstr("-AFTER"));
+	strbuf_cat(&arena, buf, strbuf_view(buf), cstr("-AFTER"));
 	ASSERT(!strcmp(buf->cstr, "AAAAAAAAAABBBBBBBBBBCCCCCCCCCC-AFTER"));
 
 	//Prepending BEFORE- to existing buffer
-	strbuf_cat(arena, buf, cstr("BEFORE-"), strbuf_view(buf));
+	strbuf_cat(&arena, buf, cstr("BEFORE-"), strbuf_view(buf));
 	/*printf("["PRIstr"]\n", PRIstrarg(strbuf_view(buf)));*/
 	ASSERT(!strcmp(buf->cstr, "BEFORE-AAAAAAAAAABBBBBBBBBBCCCCCCCCCC-AFTER"));
 
 	// Testing strbuf_cat() with a single invalid str
 	// strbuf_cat() should return a valid string of length 0
 	str1 = STRVIEW_INVALID;
-	strbuf_cat(arena, buf, str1);
+	strbuf_cat(&arena, buf, str1);
 	str1 = strbuf_view(buf);
 	ASSERT(str1.size == 0);
 	ASSERT(str1.data);
@@ -210,7 +212,7 @@ TEST test_strbuf_strcat(void)
 	ASSERT(buf->capacity == STATIC_BUFFER_SIZE);
 
 	// Concatenating DDDDDDDDDD EEEEEEEEEE FFFFFFFFFF
-	strbuf_cat(arena, buf, cstr("DDDDDDDDDD"), cstr("EEEEEEEEEE"), cstr("FFFFFFFFFF"));
+	strbuf_cat(&arena, buf, cstr("DDDDDDDDDD"), cstr("EEEEEEEEEE"), cstr("FFFFFFFFFF"));
 	ASSERT(buf->capacity == STATIC_BUFFER_SIZE);	//capacity should not change
 	ASSERT(buf->size == 30);
 	ASSERT(!strcmp(buf->cstr, "DDDDDDDDDDEEEEEEEEEEFFFFFFFFFF"));
@@ -220,7 +222,7 @@ TEST test_strbuf_strcat(void)
 	// **** This is no longer a limitation with arenas: ↑↑↑↑↑
 	str1 = strbuf_view(buf);
 	str1 = strview_sub(str1, 5, 10);
-	strbuf_cat(arena, buf, cstr("never "), str1, cstr(" seen"));
+	strbuf_cat(&arena, buf, cstr("never "), str1, cstr(" seen"));
 	/*printf("["PRIstr"]\n", PRIstrarg(strbuf_view(buf)));*/
 	/*ASSERT(buf->size == 0);*/
 
@@ -547,6 +549,20 @@ TEST test_strbuf_insert_after(void)
 
 	strbuf_destroy(buf);
 	ASSERT(!buf->cstr);
+	PASS();
+}
+
+TEST test_strbuf_empty(void)
+{
+	strbuf_t buf_instance = { 0 };
+	strbuf_t *buf = &buf_instance;
+	strbuf_empty(buf);
+	strbuf_assign(buf, cstr("Hello"));
+	ASSERT(buf->cstr[0] != 0 && buf->size > 0);
+	ASSERT(strview_equal(strbuf_view(buf), cstr("Hello")));
+	strbuf_empty(buf);
+	ASSERT(buf->cstr[0] == 0 && buf->size == 0);
+	strbuf_destroy(buf);
 	PASS();
 }
 

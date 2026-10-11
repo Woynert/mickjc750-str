@@ -69,8 +69,8 @@ int strbuf_grow(strbuf_t* buf, int capacity);
 
 // ↓↓↓ Private.
 int strbuf__resize(strbuf_t* buf, int new_size);
-int strbuf__cat(Arena scratch, strbuf_t *buf, int view_count, strview_t *views);
-int strbuf__cat_variadic(Arena scratch, strbuf_t* buf, int view_count, ...);
+int strbuf__cat(Arena *scratch, strbuf_t *buf, int view_count, strview_t *views);
+int strbuf__cat_variadic(Arena *scratch, strbuf_t* buf, int view_count, ...);
 
 static STRBUF__ALLOC_PROTOTYPE(strbuf__default_allocator) {
     // New allocation: ptr == NULL && size > 0
@@ -87,9 +87,14 @@ static STRBUF__ALLOC_PROTOTYPE(strbuf__default_allocator) {
 
 #ifdef STRBUF_IMPLEMENTATION
 
-void strbuf_empty(strbuf_t* buf) { buf->size = 0; }
+void strbuf_empty(strbuf_t* buf) {
+    buf->size = 0;
+    if (buf->capacity > 0) { buf->cstr[0] = 0; }
+}
+
 
 strview_t strbuf__view(strbuf_t* buf) {
+    if (!buf) { return STRVIEW_INVALID; }
     return (strview_t) { .data=buf->cstr, .size=buf->size, };
 }
 strview_t strbuf__view2(const strbuf_t buf) {
@@ -261,7 +266,7 @@ int strbuf_append_char(strbuf_t *buf, char c) {
     return strbuf_append(buf, (strview_t){.data=&c, .size=1});
 }
 
-int strbuf__cat_variadic(Arena scratch, strbuf_t* buf, int view_count, ...) {
+int strbuf__cat_variadic(Arena *scratch, strbuf_t* buf, int view_count, ...) {
     strview_t views[view_count];
     va_list ap;
     va_start(ap, view_count);
@@ -274,7 +279,7 @@ int strbuf__cat_variadic(Arena scratch, strbuf_t* buf, int view_count, ...) {
 
 /// @Note: If combined size of all views overflows INT_MAX, will return error.
 /// @Note: Views may be part of buf only if not fixed.
-int strbuf__cat(Arena scratch, strbuf_t *buf, int view_count, strview_t *views) {
+int strbuf__cat(Arena *scratch, strbuf_t *buf, int view_count, strview_t *views) {
     bool contains_itself = false;
     int required_size = STRBUF__ZERO_TERM;
     const strview_t og_view = strbuf_view(buf);
@@ -291,7 +296,7 @@ int strbuf__cat(Arena scratch, strbuf_t *buf, int view_count, strview_t *views) 
         if (err) { strbuf_empty(buf); return -1; }
     }
     if (contains_itself) {
-        strbuf_t temp = strbuf_create_with_allocator(arena_allocator, &scratch);
+        strbuf_t temp = strbuf_create_with_allocator(arena_allocator, scratch);
         int err = strbuf_assign(&temp, strbuf_view(buf));
         //printf("->["PRIstr"]\n", PRIstrarg(strbuf_view(buf)));
         //printf("->["PRIstr"]\n", PRIstrarg(strbuf_view(&temp)));
