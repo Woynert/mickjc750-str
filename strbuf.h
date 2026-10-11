@@ -1,25 +1,20 @@
-#include <assert.h>
-#include <stdalign.h>
-#define STRBUF_IMPLEMENTATION
-
 /*
    String buffer.
 
    * Owns the memory.
    * Custom allocation supported. (Bring your own memory).
    * Auto grow.
-   * All modify operations zero terminate the buffer.
+   * All modify operations zero terminate the buffer. (Safe to pass to standard functions).
+   * stb-like: define STRBUF_IMPLEMENTATION for implementation.
 
    */
 
 #ifndef STRBUF_H
 #define STRBUF_H
 
-#include "stdlib.h"
 #include "strview.h"
-#include "limits.h"
-#include "stdio.h"
 #include "arena.h"
+#include "assert.h"
 
 #define STRBUF_CAPACITY_GROW_STEP 16
 #define STRBUF__ZERO_TERM (1)
@@ -44,68 +39,67 @@
 #define STRBUF__PP_NARG(...)  STRBUF__PP_NARG_(__VA_ARGS__,STRBUF__PP_RSEQ_N())
 
 
-
-
 typedef struct {
     int capacity;
     int size;
     char *cstr;
     bool is_fixed;    // Only ever used in 'strbuf__resize' and 'strbuf_destroy'.
-    STRBUF__ALLOC_PROTOTYPE(*allocator);
     void *allocator_user_data;
+    STRBUF__ALLOC_PROTOTYPE(*allocator);
 } strbuf_t;
 static_assert(sizeof(strbuf_t) == 40, "");
 
 
 // ↓↓↓ Public.
+void strbuf_empty(strbuf_t* buf);
 strbuf_t strbuf_create_with_allocator(STRBUF__ALLOC_PROTOTYPE(*allocator), void *allocator_user_data);
-strbuf_t strbuf_create_fixed(char *data, int size);
+strbuf_t strbuf_create_fixed(char *data, int capacity);
+int strbuf_grow(strbuf_t *buf, const int new_capacity);
+int strbuf_shrink(strbuf_t *buf);
 int strbuf_assign(strbuf_t* buf, strview_t str);
 int strbuf_append(strbuf_t* buf, strview_t str);
-int strbuf_shrink(strbuf_t* buf);
+int strbuf_prepend(strbuf_t* buf, strview_t str);
+int strbuf_insert_at_index(strbuf_t *buf, const int index, strview_t str);
+int strbuf_insert_before(strbuf_t *buf, strview_t pos, strview_t view);
+int strbuf_insert_after(strbuf_t *buf, strview_t pos, strview_t view);
+int strbuf_append_char(strbuf_t *buf, char c);
+__attribute__((format(printf, 2, 0))) int strbuf_append_vprintf(strbuf_t *buf, const char *fmt, va_list p_list);
+__attribute__((format(printf, 2, 3))) int strbuf_append_printf(strbuf_t *buf, const char *fmt, ...);
+__attribute__((format(printf, 2, 3))) int strbuf_printf(strbuf_t *buf, const char *fmt, ...);
 void strbuf_destroy(strbuf_t* buf);
-int strbuf_grow(strbuf_t* buf, int capacity);
 #define strbuf_cat(scratch, buf, ...) strbuf__cat_variadic(scratch, buf, STRBUF__PP_NARG(__VA_ARGS__), __VA_ARGS__)
+#define strbuf_view(buf) _Generic((buf), \
+    strbuf_t*: strbuf__view,             \
+    strbuf_t : strbuf__view2 )(buf)
 
 // ↓↓↓ Private.
-int strbuf__resize(strbuf_t* buf, int new_size);
-int strbuf__cat(Arena *scratch, strbuf_t *buf, int view_count, strview_t *views);
+strview_t strbuf__view(strbuf_t* buf);
+strview_t strbuf__view2(const strbuf_t buf);
+int strbuf__resize(strbuf_t *buf, const int new_capacity);
+int strbuf__grow_to_fit(strbuf_t *buf, const int minimum_size);
 int strbuf__cat_variadic(Arena *scratch, strbuf_t* buf, int view_count, ...);
+int strbuf__cat(Arena *scratch, strbuf_t *buf, int view_count, strview_t *views);
+STRBUF__ALLOC_PROTOTYPE(strbuf__default_allocator);
 
-static STRBUF__ALLOC_PROTOTYPE(strbuf__default_allocator) {
-    // New allocation: ptr == NULL && size > 0
-    // Reallocation:   ptr != NULL && size > 0
-    // Free:           ptr != NULL && size == 0
-    (void)align; (void)user_data; // Unused: malloc guarantees alignment.
-    void* result = NULL;
-    if      (size == 0)   { free(ptr);                   }
-    else if (ptr == NULL) { result = malloc(size);       }
-    else                  { result = realloc(ptr, size); }
-    return result;
-}
+
 #endif
+#if defined STRBUF_IMPLEMENTATION || defined __CLANGD__
 
-#ifdef STRBUF_IMPLEMENTATION
+#include "stdalign.h"
 
 void strbuf_empty(strbuf_t* buf) {
     buf->size = 0;
     if (buf->capacity > 0) { buf->cstr[0] = 0; }
 }
 
-
 strview_t strbuf__view(strbuf_t* buf) {
     if (!buf) { return STRVIEW_INVALID; }
     return (strview_t) { .data=buf->cstr, .size=buf->size, };
 }
+
 strview_t strbuf__view2(const strbuf_t buf) {
     return (strview_t) { .data=buf.cstr, .size=buf.size, };
 }
-
-#define strbuf_view(buf) _Generic((buf),\
-    strbuf_t*: strbuf__view, \
-    strbuf_t:  strbuf__view2 \
-    )(buf)
-
 
 strbuf_t strbuf_create_with_allocator(STRBUF__ALLOC_PROTOTYPE(*allocator), void *allocator_user_data) {
     return (strbuf_t) { .allocator = allocator, .allocator_user_data = allocator_user_data, };
@@ -267,9 +261,9 @@ int strbuf_append_char(strbuf_t *buf, char c) {
 }
 
 int strbuf__cat_variadic(Arena *scratch, strbuf_t* buf, int view_count, ...) {
-    strview_t views[view_count];
     va_list ap;
     va_start(ap, view_count);
+    strview_t views[view_count];
     for (int i = 0; i < view_count; i++) {
         views[i] = va_arg(ap, strview_t);
     }
@@ -310,7 +304,6 @@ int strbuf__cat(Arena *scratch, strbuf_t *buf, int view_count, strview_t *views)
     buf->size = 0;
     for (int i = 0; i < view_count; ++i) {
         if (views[i].size <= 0) { continue; }
-        //printf("gonna append %d:["PRIstr"]\n", i, PRIstrarg(views[i]));
         strbuf_append(buf, views[i]);
     }
     return 0;
@@ -374,6 +367,18 @@ void strbuf_destroy(strbuf_t* buf) {
     //buf->capacity = 0;
     //buf->size = 0;
     //buf->cstr = NULL;
+}
+
+STRBUF__ALLOC_PROTOTYPE(strbuf__default_allocator) {
+    // New allocation: ptr == NULL && size > 0
+    // Reallocation:   ptr != NULL && size > 0
+    // Free:           ptr != NULL && size == 0
+    (void)align; (void)user_data; // Unused: malloc guarantees alignment.
+    void* result = NULL;
+    if      (size == 0)   { free(ptr);                   }
+    else if (ptr == NULL) { result = malloc(size);       }
+    else                  { result = realloc(ptr, size); }
+    return result;
 }
 
 #endif

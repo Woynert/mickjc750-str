@@ -24,11 +24,6 @@ compile:
 test:
 	meson test --interactive -C build
 
-#fuzz:
-	#make compile && \
-	#./build/my_test_fuzzy    -runs=5000 && \
-	#echo "done."
-
 coverage:
 	ninja coverage-html -C build
 
