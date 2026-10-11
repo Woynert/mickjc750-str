@@ -89,9 +89,18 @@ static STRBUF__ALLOC_PROTOTYPE(strbuf__default_allocator) {
 
 void strbuf_empty(strbuf_t* buf) { buf->size = 0; }
 
-strview_t strbuf_view(strbuf_t* buf) {
+strview_t strbuf__view(strbuf_t* buf) {
     return (strview_t) { .data=buf->cstr, .size=buf->size, };
 }
+strview_t strbuf__view2(const strbuf_t buf) {
+    return (strview_t) { .data=buf.cstr, .size=buf.size, };
+}
+
+#define strbuf_view(buf) _Generic((buf),\
+    strbuf_t*: strbuf__view, \
+    strbuf_t:  strbuf__view2 \
+    )(buf)
+
 
 strbuf_t strbuf_create_with_allocator(STRBUF__ALLOC_PROTOTYPE(*allocator), void *allocator_user_data) {
     return (strbuf_t) { .allocator = allocator, .allocator_user_data = allocator_user_data, };
@@ -223,6 +232,7 @@ int strbuf_insert_at_index(strbuf_t *buf, const int index, strview_t str) {
         if (pos < cut) {
             strview_t left_half = { .data = str.data, .size = strbuf__int_min(str.size, cut-pos), };
             strview_t right_half = { .data = buf->cstr + index + str.size, .size = strbuf__int_max(0, str.size - left_half.size) };
+            //printf("\nhalfs["PRIstr"]["PRIstr"]\n", PRIstrarg(left_half), PRIstrarg(right_half));
             memmove(buf->cstr + index, left_half.data, (size_t)left_half.size);
             memmove(buf->cstr + index + left_half.size, right_half.data, (size_t)right_half.size);
         } else {
@@ -244,7 +254,11 @@ int strbuf_insert_before(strbuf_t *buf, strview_t pos, strview_t view) {
 
 int strbuf_insert_after(strbuf_t *buf, strview_t pos, strview_t view) {
     if (!strview_is_subview_of_view(strbuf_view(buf), pos)) { return -1; }
-    return strbuf_insert_at_index(buf, (int)(pos.data - buf->cstr) + view.size, view);
+    return strbuf_insert_at_index(buf, (int)(pos.data - buf->cstr) + pos.size, view);
+}
+
+int strbuf_append_char(strbuf_t *buf, char c) {
+    return strbuf_append(buf, (strview_t){.data=&c, .size=1});
 }
 
 int strbuf__cat_variadic(Arena scratch, strbuf_t* buf, int view_count, ...) {
@@ -266,7 +280,7 @@ int strbuf__cat(Arena scratch, strbuf_t *buf, int view_count, strview_t *views) 
     const strview_t og_view = strbuf_view(buf);
     {
         for (int i = 0; i < view_count; ++i) {
-            printf("%d:["PRIstr"]\n", i, PRIstrarg(views[i]));
+            //printf("%d:["PRIstr"]\n", i, PRIstrarg(views[i]));
             if (strbuf__add_will_overflow_int(required_size, views[i].size)) { return -1; }
             if (strview_is_subview_of_view(og_view, views[i])) { contains_itself = true; }
             required_size += views[i].size;
@@ -279,8 +293,8 @@ int strbuf__cat(Arena scratch, strbuf_t *buf, int view_count, strview_t *views) 
     if (contains_itself) {
         strbuf_t temp = strbuf_create_with_allocator(arena_allocator, &scratch);
         int err = strbuf_assign(&temp, strbuf_view(buf));
-        printf("->["PRIstr"]\n", PRIstrarg(strbuf_view(buf)));
-        printf("->["PRIstr"]\n", PRIstrarg(strbuf_view(&temp)));
+        //printf("->["PRIstr"]\n", PRIstrarg(strbuf_view(buf)));
+        //printf("->["PRIstr"]\n", PRIstrarg(strbuf_view(&temp)));
         if (err) { return -1; }
         for (int i = 0; i < view_count; ++i) {
             if (strview_is_subview_of_view(og_view, views[i])) {
@@ -291,12 +305,57 @@ int strbuf__cat(Arena scratch, strbuf_t *buf, int view_count, strview_t *views) 
     buf->size = 0;
     for (int i = 0; i < view_count; ++i) {
         if (views[i].size <= 0) { continue; }
-        printf("gonna append %d:["PRIstr"]\n", i, PRIstrarg(views[i]));
+        //printf("gonna append %d:["PRIstr"]\n", i, PRIstrarg(views[i]));
         strbuf_append(buf, views[i]);
     }
     return 0;
 }
 
+
+__attribute__((format(printf, 2, 0)))
+int strbuf_append_vprintf(strbuf_t *buf, const char *fmt, va_list p_list) {
+    int err;
+    va_list list;
+    va_copy(list, p_list);
+    const int printf_length = vsnprintf(NULL, 0, fmt, list);
+    va_end(list);
+    if (printf_length < 0) { return -1; }
+    if (printf_length == 0) { return 0; }
+    const int required_cap = buf->size + printf_length + STRBUF__ZERO_TERM;
+    if (buf->capacity < required_cap) {
+        err = strbuf__grow_to_fit(buf, required_cap);
+        if (err) { strbuf_empty(buf); return -1; }
+    }
+    va_copy(list, p_list);
+    // See man vsnprintf for example.
+    err = vsnprintf(buf->cstr + buf->size, (size_t)printf_length + STRBUF__ZERO_TERM, fmt, list);
+    va_end(list);
+    buf->size = buf->size + printf_length;
+    buf->cstr[buf->size] = 0;
+    if (err < 0) { return -1; }
+    return 0;
+}
+
+__attribute__((format(printf, 2, 3)))
+int strbuf_append_printf(strbuf_t *buf, const char *fmt, ...) {
+    va_list list;
+    va_start(list, fmt);
+    int err = strbuf_append_vprintf(buf, fmt, list);
+    va_end(list);
+    return err;
+}
+
+/// @Note: If appending always preffer 'strbuf_append_printf' instead, because
+///        According to 'man snprintf' dest should not be same as source.
+__attribute__((format(printf, 2, 3)))
+int strbuf_printf(strbuf_t *buf, const char *fmt, ...) {
+    strbuf_empty(buf);
+    va_list list;
+    va_start(list, fmt);
+    int err = strbuf_append_vprintf(buf, fmt, list);
+    va_end(list);
+    return err;
+}
 
 /// @Note: here 'allocator' acts as free.
 void strbuf_destroy(strbuf_t* buf) {
