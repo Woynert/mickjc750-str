@@ -11,6 +11,6 @@ Original: https://github.com/mickjc750/str
 ```
 cd tests
 make setupSetupDebug
-make compile && make test
+make test
 ```
 
