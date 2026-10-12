@@ -42,7 +42,10 @@
 typedef struct {
     int capacity;
     int size;
-    char *cstr;
+    union {
+        char *data;
+        char *cstr;
+    };
     bool is_fixed;    // Only ever used in 'strbuf__resize' and 'strbuf_destroy'.
     void *allocator_user_data;
     STRBUF__ALLOC_PROTOTYPE(*allocator);
