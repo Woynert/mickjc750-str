@@ -10,7 +10,7 @@ Original: https://github.com/mickjc750/str
 
 ```
 cd tests
-make setupSetupDebug
 make test
+make coverage
 ```
 

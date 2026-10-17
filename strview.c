@@ -578,3 +578,7 @@ static strview_t find_last(strview_t haystack, strview_t needle, int(*comp_func)
 	return result;
 }
 
+bool strview_equal(strview_t str1, strview_t str2)
+{
+    return strview_compare(str1, str2) == 0;
+}

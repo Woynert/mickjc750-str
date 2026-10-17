@@ -4,28 +4,12 @@ default:
 clean:
 	rm -rf build
 
-# https://mesonbuild.com/howtox.html#use-address-sanitizer
-# https://mesonbuild.com/Builtin-options.html#details-for-buildtype
-# '--buildtype=debug' implicitely adds: '--debug','-Db_ndebug=false','-Doptimization=g'
-mesonSetupDebug:
-	meson setup --reconfigure --prefix=$(CURDIR)/build build \
-		--buildtype=debug -Doptimization=g -Db_sanitize=address,undefined
-
-mesonSetupDebugClang:
-	CC=clang \
-	meson setup --reconfigure --prefix=$(CURDIR)/build build \
-		--buildtype=debug -Doptimization=g -Db_sanitize=address,undefined \
-		-Db_coverage=true -Db_lundef=false
-
-compile:
-	meson compile -C build
-
-# To run a single test: meson test --interactive -C build umapstr_test
 test:
-	meson test --interactive -C build
+	premake5 ninja && ninja -C build && premake5 test
 
 coverage:
-	ninja coverage-html -C build
+	mkdir -p ./build/coverage/
+	gcovr -r .. --html-details ./build/coverage/coverage.html
 
 coverageClean:
 	find build -name "*.profraw" -delete

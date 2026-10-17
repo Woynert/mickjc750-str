@@ -692,10 +692,7 @@
 	strview_t strview_dequote(strview_t src);
 
 
-bool strview_equal(strview_t str1, strview_t str2)
-{
-    return strview_compare(str1, str2) == 0;
-}
+bool strview_equal(strview_t str1, strview_t str2);
 
 
 #endif
